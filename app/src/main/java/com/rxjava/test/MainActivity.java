@@ -5,10 +5,14 @@ import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
 
+import com.rxjava.test.entity.UserEntity;
+import com.rxjava.test.net.ReqMultiple;
 import com.rxjava.test.student.Student;
 import com.rxjava.test.student.StudentManager;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import io.reactivex.Observable;
@@ -361,10 +365,26 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.netReq).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                new StudentManager().reqData(Student.class).subscribe(new Consumer<Student>() {
+                String DEFUALT_TIMEOUT_MINUTE = "1";
+                String DEFUALT_ROLE_CODE = "organizer";
+                HashMap<String, String> params = new HashMap<String, String>();
+                params.put("loginName", "10@163.com");
+                params.put("password", "111111");
+                params.put("deviceUID", UUID.randomUUID().toString());
+                params.put("timeout", DEFUALT_TIMEOUT_MINUTE);//测试数据
+                params.put("serviceType", 0 + "");
+                params.put("roleCode", DEFUALT_ROLE_CODE);
+
+
+                ReqMultiple.reqLogin("qa100.gensee.com", params).subscribe(new Consumer<UserEntity>() {
                     @Override
-                    public void accept(Student s) throws Exception {
-                        Log.i(TAG, "s = " + s);
+                    public void accept(UserEntity userEntity) throws Exception {
+                        Log.i(TAG, "reqLogin userEntity = " + userEntity.toString());
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+                        Log.i(TAG, "reqLogin throwable = " + throwable.getMessage());
                     }
                 });
             }

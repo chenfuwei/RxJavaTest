@@ -1,6 +1,9 @@
 package com.rxjava.test.net;
 
-import android.util.Log;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -17,9 +20,13 @@ import java.util.Map;
 import io.reactivex.Observable;
 import io.reactivex.ObservableEmitter;
 import io.reactivex.ObservableOnSubscribe;
-import io.reactivex.Observer;
 
 public class HttpProxy {
+    public static final int RESULT_OK = 1;
+    public static final int RESULT_FAILURE = -1000;
+    public static final int RESULT_TIME_OUT = -1001;
+    public static final int RESULT_CONNECT_FAILURE = -1002;
+
     final public static String URL_TOEKN_TEST2 = "https://test-api.pingan.com.cn:20443/oauth/oauth2/" +
             "access_token?client_id=P_SLDJF23LKJSVJLK_STG2&grant_type=client_credentials&client_secret=K3XAU5P4";
 
@@ -45,13 +52,11 @@ public class HttpProxy {
         return this;
     }
 
-
     public <T> Observable<T> reqData(final Class<T> tClass)
     {
         Observable<T> observable = Observable.create(new ObservableOnSubscribe<T>() {
             @Override
             public void subscribe(ObservableEmitter<T> ee) throws Exception {
-                HttpResult httpResult = new HttpResult();
                 try {
                     byte[] requestData = getRequestData();
                     URL url = new URL(reqUrl);
@@ -78,29 +83,39 @@ public class HttpProxy {
                     if (response  == HttpURLConnection.HTTP_OK) {
                         InputStream inptStream = httpURLConnection.getInputStream();
                         String sReturnValue =  dealResponseResult(inptStream);                     //处理服务器的响应结果
-                        httpResult.setResult(response);
-                        httpResult.setValue(sReturnValue);
 
-                        T a = tClass.newInstance();
-                        ee.onNext(a);
+                        JsonObject returnData = new JsonParser().parse(sReturnValue).getAsJsonObject();
+                        int result = returnData.get("result").getAsInt();
+                        if(result == RESULT_OK) {
+                            Gson gson = new GsonBuilder().create();
+                            T returnObject = gson.fromJson(sReturnValue, tClass);
+                            ee.onNext(returnObject);
+                        }else
+                        {
+                            processErrorMsg(ee, result);
+                        }
                     } else {
-                        httpResult.setResult(response);
+                        processErrorMsg(ee, response);
                     }
 
                 }  catch (SocketTimeoutException e) {
                     e.printStackTrace();
-                    ee.onError(new HttpReqError(HttpResult.ResultCode.RESULT_TIME_OUT, -1));
-                    httpResult.setResult(HttpResult.ResultCode.RESULT_TIME_OUT);
+                    processErrorMsg(ee, RESULT_TIME_OUT);
                 } catch (UnknownHostException e) {
                     e.printStackTrace();
-                    httpResult.setResult(HttpResult.ResultCode.RESULT_CONNECT_FAILURE);
+                    processErrorMsg(ee, RESULT_CONNECT_FAILURE);
                 } catch (Exception e) {
                     e.printStackTrace();
-                    httpResult.setResult(HttpResult.ResultCode.RESULT_FAILURE);
+                    processErrorMsg(ee, RESULT_FAILURE);
                 }
             }
         });
         return observable;
+    }
+
+    private void processErrorMsg(ObservableEmitter ee, int keyError)
+    {
+        ee.onError(new HttpReqError(keyError, HttpResponeError.getErrorMsg(keyError)));
     }
 
 
