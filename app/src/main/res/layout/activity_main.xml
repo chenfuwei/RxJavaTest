@@ -84,6 +84,37 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content" />
 
+            <Button
+                android:id="@+id/buffer"
+                android:text="buffer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <Button
+                android:id="@+id/window"
+                android:text="window"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <Button
+                android:id="@+id/debound"
+                android:text="debound"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <Button
+                android:id="@+id/exception"
+                android:text="exception"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <Button
+                android:id="@+id/backpressure"
+                android:text="backpressure"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+
             <TextView
                 android:layout_width="match_parent"
                 android:text="/***************************使用方式********************/"

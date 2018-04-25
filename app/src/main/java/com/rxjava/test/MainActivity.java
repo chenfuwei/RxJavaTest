@@ -10,11 +10,19 @@ import com.rxjava.test.net.ReqMultiple;
 import com.rxjava.test.student.Student;
 import com.rxjava.test.student.StudentManager;
 
+import org.reactivestreams.Subscriber;
+import org.reactivestreams.Subscription;
+
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import io.reactivex.BackpressureStrategy;
+import io.reactivex.Flowable;
+import io.reactivex.FlowableEmitter;
+import io.reactivex.FlowableOnSubscribe;
 import io.reactivex.Observable;
 import io.reactivex.ObservableEmitter;
 import io.reactivex.ObservableOnSubscribe;
@@ -362,6 +370,180 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        findViewById(R.id.buffer).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Observable.range(1, 5).buffer(2).subscribe(new Consumer<List<Integer>>() {
+                    @Override
+                    public void accept(List<Integer> integers) throws Exception {
+                        Log.i(TAG, "integers = " + integers );
+                    }
+                });
+
+                Observable.range(1, 5).buffer(3, 1).subscribe(new Consumer<List<Integer>>() {
+                    @Override
+                    public void accept(List<Integer> integers) throws Exception {
+                        Log.i(TAG, "integers = " + integers );
+                    }
+                });
+
+                Observable.interval(1, TimeUnit.SECONDS).take(10).buffer(3, TimeUnit.SECONDS).subscribe(new Consumer<List<Long>>() {
+                    @Override
+                    public void accept(List<Long> longs) throws Exception {
+                        Log.i(TAG, "longs = " + longs );
+                    }
+                });
+            }
+        });
+
+        findViewById(R.id.window).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Observable.interval(1, TimeUnit.SECONDS).take(10).window(3, TimeUnit.SECONDS)
+                        .observeOn(Schedulers.io()).subscribe(new Consumer<Observable<Long>>() {
+                    @Override
+                    public void accept(Observable<Long> longObservable) throws Exception {
+                        logMessage("aLong1 = " );
+
+                        Iterable<Long> value = longObservable.blockingIterable();
+                        Iterator<Long> iterator = value.iterator();
+                        while (iterator.hasNext())
+                        {
+                            logMessage("tmep = " + iterator.next());
+                        }
+//                        longObservable.subscribe(new Consumer<Long>() {
+//                            @Override
+//                            public void accept(Long aLong) throws Exception {
+//                                logMessage("aLong = " + aLong );
+//                            }
+//                        });
+                    }
+                });
+            }
+        });
+
+        //数据变化后，debound设置的时间后才执行操作
+        findViewById(R.id.debound).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Observable.create(new ObservableOnSubscribe<Integer>() {
+                    @Override
+                    public void subscribe(ObservableEmitter<Integer> subscriber) throws Exception {
+                        if (subscriber.isDisposed()) return;
+                        try {
+                            for (int i = 0; i < 10; i++) {
+                                logMessage("accept i = " + i);
+                                subscriber.onNext(i);
+                                try {
+                                    Thread.currentThread().sleep(i * 1000);
+                                } catch (InterruptedException e) {
+                                    e.printStackTrace();
+                                }
+                            }
+                            subscriber.onComplete();
+                        } catch (Exception e) {
+                            subscriber.onError(e);
+                        }
+                    }
+                }).subscribeOn(Schedulers.newThread()).debounce(5, TimeUnit.SECONDS).subscribe(new Consumer<Integer>() {
+                    @Override
+                    public void accept(Integer integer) throws Exception {
+                        logMessage("accept integer = " + integer);
+                    }
+                });
+            }
+        });
+
+        findViewById(R.id.exception).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+//                Observable.create(new ObservableOnSubscribe<Integer>() {
+//                    @Override
+//                    public void subscribe(ObservableEmitter<Integer> e) throws Exception {
+//                        e.onNext(1 / 0);
+//                    }
+//                }).subscribe(new Consumer<Integer>() {
+//                    @Override
+//                    public void accept(Integer integer) throws Exception {
+//                        logMessage("exception integer = " + integer);
+//                    }
+//                }, new Consumer<Throwable>() {
+//                    @Override
+//                    public void accept(Throwable throwable) throws Exception {
+//                        logMessage("exception throwable = " + throwable.getMessage());
+//                    }
+//                });
+
+                Observable.just(0, 10).map(new Function<Integer, String>() {
+                    @Override
+                    public String apply(Integer integer) throws Exception {
+                        return 10 / integer +"";
+                    }
+                }).subscribe(new Consumer<String>() {
+                    @Override
+                    public void accept(String s) throws Exception {
+                        logMessage("s = " + s);
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+                        logMessage("throwable = " + throwable.getMessage());
+                    }
+                });
+            }
+        });
+
+        //rxjava中observable不支持背压，flowable才支持背压。对于再同一线程及消费的速度比生产的速度快时，不会产生背压操作，应使用
+        //observalbe, 不适用flowable，应为flowable效率低些
+
+        findViewById(R.id.backpressure).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Flowable.create(new FlowableOnSubscribe<Integer>() {
+                    @Override
+                    public void subscribe(FlowableEmitter<Integer> e) throws Exception {
+                        int i = 0;
+                        while (!e.isCancelled())
+                        {
+                            long request = e.requested();
+                            if(request == 0) continue;
+                            logMessage("emitter request = " + request + " i = " + i);
+                            e.onNext(i++);
+                        }
+                    }
+                }, BackpressureStrategy.BUFFER).subscribeOn(Schedulers.newThread()).observeOn(Schedulers.newThread()).subscribe(new Subscriber<Integer>() {
+                    @Override
+                    public void onSubscribe(Subscription s) {
+                        subscription = s;
+                        s.request(1);
+                    }
+
+                    @Override
+                    public void onNext(Integer integer) {
+                        logMessage("onNext integer = " + integer);
+                        try {
+                            Thread.sleep(1000);
+                        }catch (Exception e)
+                        {
+
+                        }
+                        subscription.request(1);
+
+                    }
+
+                    @Override
+                    public void onError(Throwable t) {
+                        logMessage("onError t = " + t.getMessage());
+                    }
+
+                    @Override
+                    public void onComplete() {
+
+                    }
+                });
+            }
+        });
+
         findViewById(R.id.netReq).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -389,5 +571,10 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+    Subscription subscription = null;
+    private void logMessage(String value)
+    {
+        Log.i(TAG, value + " " + "theadName = " + Thread.currentThread().getName());
     }
 }
