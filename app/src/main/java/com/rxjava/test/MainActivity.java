@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
 import io.reactivex.BackpressureStrategy;
@@ -26,10 +27,13 @@ import io.reactivex.FlowableOnSubscribe;
 import io.reactivex.Observable;
 import io.reactivex.ObservableEmitter;
 import io.reactivex.ObservableOnSubscribe;
+import io.reactivex.ObservableSource;
 import io.reactivex.disposables.Disposable;
+import io.reactivex.functions.Action;
 import io.reactivex.functions.BiFunction;
 import io.reactivex.functions.Consumer;
 import io.reactivex.functions.Function;
+import io.reactivex.functions.Predicate;
 import io.reactivex.observables.ConnectableObservable;
 import io.reactivex.schedulers.Schedulers;
 import io.reactivex.subjects.AsyncSubject;
@@ -544,6 +548,196 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        findViewById(R.id.onErrorReturn).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Observable.create(new ObservableOnSubscribe<Student>() {
+                    @Override
+                    public void subscribe(ObservableEmitter<Student> e) throws Exception {
+                        Student student = new Student();
+                        student.setId(1);
+                        student.setName("1");
+                        student.setAge(1);
+                        e.onNext(student);
+
+                        e.onError(new Throwable("onError"));
+
+                        Student student1 = new Student();
+                        student1.setId(2);
+                        student1.setName("2");
+                        student1.setAge(2);
+                        e.onNext(student1);
+                    }
+                }).onErrorReturn(new Function<Throwable, Student>() {
+                    @Override
+                    public Student apply(Throwable throwable) throws Exception {
+                        return new Student(100, "100", 100);
+                    }
+                }).subscribe(new Consumer<Student>() {
+                    @Override
+                    public void accept(Student student) throws Exception {
+                        logMessage("onNext student = " + student);
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+                        logMessage("onError throwable = " + throwable.getMessage());
+                    }
+                }, new Action() {
+                    @Override
+                    public void run() throws Exception {
+                        logMessage("onComplete");
+                    }
+                });
+            }
+        });
+
+        findViewById(R.id.onErrorResumeNext).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Observable.create(new ObservableOnSubscribe<Student>() {
+                    @Override
+                    public void subscribe(ObservableEmitter<Student> e) throws Exception {
+                        Student student = new Student();
+                        student.setId(1);
+                        student.setName("1");
+                        student.setAge(1);
+                        e.onNext(student);
+
+                        e.onError(new Throwable("onError"));
+
+                        Student student1 = new Student();
+                        student1.setId(2);
+                        student1.setName("2");
+                        student1.setAge(2);
+                        e.onNext(student1);
+                    }
+                }).onErrorResumeNext(new Function<Throwable, ObservableSource<? extends Student>>() {
+                    @Override
+                    public ObservableSource<? extends Student> apply(Throwable throwable) throws Exception {
+                        return Observable.just(new Student(200, "200", 200), new Student(300, "300", 300));
+                    }
+                }).subscribe(new Consumer<Student>() {
+                    @Override
+                    public void accept(Student student) throws Exception {
+                        logMessage("onNext student = " + student);
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+                        logMessage("onError throwable = " + throwable.getMessage());
+                    }
+                }, new Action() {
+                    @Override
+                    public void run() throws Exception {
+                        logMessage("onComplete");
+                    }
+                });
+            }
+        });
+
+        findViewById(R.id.retry).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Observable.create(new ObservableOnSubscribe<Student>() {
+                    @Override
+                    public void subscribe(ObservableEmitter<Student> e) throws Exception {
+                        Student student = new Student();
+                        student.setId(1);
+                        student.setName("1");
+                        student.setAge(1);
+                        e.onNext(student);
+
+                        logMessage("1");
+                        e.onNext(new Student(11, "11", 11));
+                        logMessage("2");
+                        e.onError(new ArithmeticException("onError"));
+                        logMessage("3");
+                        Student student1 = new Student();
+                        student1.setId(2);
+                        student1.setName("2");
+                        student1.setAge(2);
+                        e.onNext(student1);
+                    }
+                })
+//                        .onErrorResumeNext(new Function<Throwable, ObservableSource<? extends Student>>() {
+//                    @Override
+//                    public ObservableSource<? extends Student> apply(Throwable throwable) throws Exception {
+//                        return Observable.just(new Student(200, "200", 200), new Student(300, "300", 300));
+//                    }
+//                })
+//                        .retry(3, new Predicate<Throwable>() {
+//                            @Override
+//                            public boolean test(Throwable throwable) throws Exception {
+//                                return throwable instanceof ArithmeticException;
+//                            }
+//                        })
+
+                        .retryWhen(new Function<Observable<Throwable>, ObservableSource<?>>() {
+                            @Override
+                            public ObservableSource<?> apply(Observable<Throwable> throwableObservable) throws Exception {
+                                logMessage("retryWhen");
+                                return Observable.timer(3, TimeUnit.SECONDS);
+                            }
+                        })
+                        .subscribe(new Consumer<Student>() {
+                    @Override
+                    public void accept(Student student) throws Exception {
+                        logMessage("onNext student = " + student);
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+                        logMessage("onError throwable = " + throwable.getMessage());
+                    }
+                }, new Action() {
+                    @Override
+                    public void run() throws Exception {
+                        logMessage("onComplete");
+                    }
+                });
+            }
+        });
+
+        findViewById(R.id.timeout).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Observable.just(10,20,30).delay(3, TimeUnit.SECONDS).timeout(5, TimeUnit.SECONDS).subscribe(new Consumer<Integer>() {
+                    @Override
+                    public void accept(Integer integer) throws Exception {
+                        logMessage("integer = " + integer);
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+                        logMessage("throwable = " + throwable.getMessage());
+                    }
+                });
+            }
+        });
+
+        findViewById(R.id.from).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Observable.fromCallable(new Callable<String>() {
+                    @Override
+                    public String call() throws Exception {
+                        return getValue();
+                    }
+                }).subscribe(new Consumer<String>() {
+                    @Override
+                    public void accept(String s) throws Exception {
+                        logMessage("from s = " + s);
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+                        logMessage("from throwable = " + throwable.getMessage());
+                    }
+                });
+            }
+        });
+
         findViewById(R.id.netReq).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -576,5 +770,12 @@ public class MainActivity extends AppCompatActivity {
     private void logMessage(String value)
     {
         Log.i(TAG, value + " " + "theadName = " + Thread.currentThread().getName());
+    }
+
+    private String getValue() throws ArithmeticException
+    {
+        int i = 100;
+        String n = i / 0 + "";
+        return n;
     }
 }
